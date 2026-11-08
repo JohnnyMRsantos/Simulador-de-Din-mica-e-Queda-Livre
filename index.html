@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Simulador A3 - Engenharia em Movimento</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        #painel { position: absolute; top: 15px; left: 15px; background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 340px; max-height: 90vh; overflow-y: auto; z-index: 10; border-left: 4px solid #3b82f6; }
+        h1, h2 { font-size: 15px; margin: 0 0 15px 0; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; }
+        label { font-size: 13px; font-weight: bold; color: #334155; display: block; margin-top: 10px; margin-bottom: 3px; }
+        select { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: inherit; margin-bottom: 5px; }
+        button { background: #2563eb; color: white; border: none; padding: 12px; width: 100%; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 15px; margin-bottom: 10px; transition: 0.2s; text-transform: uppercase; font-size: 12px; }
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #94a3b8; cursor: not-allowed; }
+        #btn-reset { background: #ef4444; display: none; }
+        #btn-reset:hover { background: #dc2626; }
+        #btn-export { background: #10b981; display: none; margin-top: 10px; }
+        #btn-export:hover { background: #059669; }
+        .info { font-size: 13px; margin-bottom: 8px; color: #475569; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 15px; margin-top: 10px; }
+        th, td { border: 1px solid #cbd5e1; padding: 5px; text-align: center; font-size: 12px; }
+        th { background-color: #f1f5f9; color: #0f172a; }
+        .grafico-container { display: none; margin-top: 15px; background: white; padding: 10px; border-radius: 4px; border: 1px solid #e2e8f0; }
+        #dica { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 8px 16px; border-radius: 20px; font-size: 12px; pointer-events: none; border: 1px solid #334155; }
+        
+        #modal-conclusao { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 25px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 20; width: 400px; border-top: 5px solid #3b82f6; text-align: justify; }
+        #modal-conclusao h2 { text-align: center; color: #1e293b; font-size: 18px; margin-bottom: 15px; }
+        #modal-conclusao p { font-size: 13px; color: #334155; line-height: 1.5; margin-bottom: 10px; }
+        #modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 15; }
+        #btn-fechar-modal { background: #3b82f6; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div id="painel">
+        <h1>Simulador de Dinâmica e Queda Livre</h1>
+        
+        <div class="info">Gravidade (g): <b>10.00 m/s²</b></div>
+        
+        <label for="select-altura">Variável 1: Altura de Lançamento</label>
+        <select id="select-altura">
+            <option value="5">1º Andar (5.00 m)</option>
+            <option value="15" selected>Prédio Médio (15.00 m)</option>
+            <option value="30">Torre Alta (30.00 m)</option>
+        </select>
+
+        <label for="select-massa">Variável 2: Massa e Material</label>
+        <select id="select-massa">
+            <option value="0.05">Esfera de Isopor (0.05 kg)</option>
+            <option value="0.5">Esfera de Plástico (0.50 kg)</option>
+            <option value="5.0" selected>Esfera de Aço (5.00 kg)</option>
+        </select>
+        
+        <button id="btn-lancar">Lançar Projétil (0/5)</button>
+        <button id="btn-reset">Configurar Novo Experimento</button>
+        <button id="btn-export">Exportar Dados (CSV)</button>
+
+        <h2>Registros (5 Repetições)</h2>
+        <table>
+            <thead><tr><th>Teste</th><th>Tempo (s)</th><th>Erro (%)</th></tr></thead>
+            <tbody id="tabela-corpo"></tbody>
+        </table>
+
+        <div id="resultados-finais" style="display: none;">
+            <div class="info" id="res-teorico">Teórico (Sem Atrito): -</div>
+            <div class="info" id="res-experimental">Empírico (Média Real): -</div>
+            
+            <div class="grafico-container" id="container-barras">
+                <canvas id="graficoBarras"></canvas>
+            </div>
+            <div class="grafico-container" id="container-linha">
+                <canvas id="graficoErros"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-overlay"></div>
+    <div id="modal-conclusao">
+        <h2>Conclusão Experimental</h2>
+        <div id="texto-conclusao"></div>
+        <button id="btn-fechar-modal">Fechar Análise</button>
+    </div>
+
+    <div id="dica">Arraste o mouse para orbitar | Scroll para zoom</div>
+
+    <script>
+        const cena = new THREE.Scene();
+        cena.background = new THREE.Color(0x0f172a); 
+        
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderizador = new THREE.WebGLRenderer({ antialias: true });
+        renderizador.setSize(window.innerWidth, window.innerHeight);
+        renderizador.shadowMap.enabled = true;
+        document.body.appendChild(renderizador.domElement);
+
+        const controles = new THREE.OrbitControls(camera, renderizador.domElement);
+        
+        cena.add(new THREE.AmbientLight(0xffffff, 0.4));
+        const luz = new THREE.DirectionalLight(0xffffff, 1.2);
+        luz.position.set(15, 40, 20);
+        luz.castShadow = true;
+        cena.add(luz);
+
+        const chao = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+        chao.rotation.x = -Math.PI / 2;
+        chao.receiveShadow = true;
+        cena.add(chao);
+        cena.add(new THREE.GridHelper(60, 60, 0x3b82f6, 0x334155));
+
+        // PRÉDIO LIMPO E PROFISSIONAL (SEM REGUA)
+        const geoPredio = new THREE.BoxGeometry(3, 1, 3);
+        const matPredio = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 });
+        const predio = new THREE.Mesh(geoPredio, matPredio);
+        predio.castShadow = true;
+        predio.receiveShadow = true;
+        cena.add(predio);
+
+        const raioEsfera = 0.5;
+        const esfera = new THREE.Mesh(new THREE.SphereGeometry(raioEsfera, 32, 32), new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.5 }));
+        esfera.castShadow = true;
+        cena.add(esfera);
+
+        const gravidade = 10.0;
+        const coefArrasto = 0.05; 
+        
+        let alturaAtual = 15.0; 
+        let massaAtual = 5.0;
+        let estado = 'pronto'; 
+        let temposMedidos = [];
+        let errosPercentuais = [];
+        
+        let tempoSimulacao = 0;
+        let velocidadeY = 0;
+        let posicaoY = 0;
+        let ultimoTempoReal = 0;
+
+        let grafBarras = null;
+        let grafLinhas = null;
+
+        const selectAltura = document.getElementById('select-altura');
+        const selectMassa = document.getElementById('select-massa');
+        const btnLancar = document.getElementById('btn-lancar');
+        const btnReset = document.getElementById('btn-reset');
+        const btnExport = document.getElementById('btn-export');
+        const tabelaCorpo = document.getElementById('tabela-corpo');
+        const resFinais = document.getElementById('resultados-finais');
+        
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalConclusao = document.getElementById('modal-conclusao');
+        const textoConclusao = document.getElementById('texto-conclusao');
+        const btnFecharModal = document.getElementById('btn-fechar-modal');
+
+        function atualizarCena() {
+            alturaAtual = parseFloat(selectAltura.value);
+            massaAtual = parseFloat(selectMassa.value);
+            
+            predio.scale.y = alturaAtual;
+            predio.position.y = alturaAtual / 2;
+            
+            posicaoY = alturaAtual;
+            esfera.position.set(2.2, posicaoY, 0);
+            velocidadeY = 0;
+            
+            camera.position.set(15, alturaAtual * 0.8, 25);
+            controles.target.set(0, alturaAtual / 3, 0);
+        }
+
+        atualizarCena();
+        selectAltura.addEventListener('change', () => { if(estado === 'pronto') atualizarCena(); });
+        selectMassa.addEventListener('change', () => { if(estado === 'pronto') atualizarCena(); });
+
+        btnLancar.addEventListener('click', () => {
+            if (estado === 'pronto' && temposMedidos.length < 5) {
+                estado = 'caindo';
+                tempoSimulacao = 0;
+                velocidadeY = 0;
+                posicaoY = alturaAtual;
+                ultimoTempoReal = performance.now();
+                
+                btnLancar.disabled = true;
+                selectAltura.disabled = true;
+                selectMassa.disabled = true;
+                btnLancar.innerText = "Coletando Dados...";
+            }
+        });
+
+        btnReset.addEventListener('click', () => {
+            temposMedidos = [];
+            errosPercentuais = [];
+            tabelaCorpo.innerHTML = '';
+            resFinais.style.display = 'none';
+            document.querySelectorAll('.grafico-container').forEach(el => el.style.display = 'none');
+            btnReset.style.display = 'none';
+            btnExport.style.display = 'none';
+            
+            btnLancar.style.display = 'block';
+            btnLancar.disabled = false;
+            btnLancar.innerText = "Lançar Projétil (0/5)";
+            selectAltura.disabled = false;
+            selectMassa.disabled = false;
+            
+            if (grafBarras) grafBarras.destroy();
+            if (grafLinhas) grafLinhas.destroy();
+            atualizarCena();
+        });
+        
+        btnFecharModal.addEventListener('click', () => {
+            modalOverlay.style.display = 'none';
+            modalConclusao.style.display = 'none';
+        });
+
+        btnExport.addEventListener('click', () => {
+            let csvContent = "data:text/csv;charset=utf-8,\n";
+            csvContent += "Projeto A3 - Engenharia em Movimento\n";
+            csvContent += `Altura (m);${alturaAtual}\n`;
+            csvContent += `Massa (kg);${massaAtual}\n`;
+            csvContent += `Gravidade (m/s2);${gravidade}\n\n`;
+            csvContent += "Teste;Tempo (s);Erro (%)\n";
+            
+            for (let i = 0; i < temposMedidos.length; i++) {
+                csvContent += `${i+1};${temposMedidos[i].toFixed(3)};${errosPercentuais[i].toFixed(2)}\n`;
+            }
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `dados_a3_altura${alturaAtual}_massa${massaAtual}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        function registrarMedicao(tempoExperimental) {
+            const tempoTeorico = Math.sqrt((2 * alturaAtual) / gravidade);
+            
+            const erroCronometro = (Math.random() * 0.15) - 0.05; 
+            let tempoFinal = tempoExperimental + erroCronometro;
+            
+            const erroPercentual = (Math.abs(tempoFinal - tempoTeorico) / tempoTeorico) * 100;
+            
+            temposMedidos.push(tempoFinal);
+            errosPercentuais.push(erroPercentual);
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>#${temposMedidos.length}</td><td>${tempoFinal.toFixed(3)}</td><td>${erroPercentual.toFixed(1)}%</td>`;
+            tabelaCorpo.appendChild(tr);
+
+            estado = 'pronto';
+            esfera.position.set(2.2, alturaAtual, 0);
+            
+            if (temposMedidos.length < 5) {
+                btnLancar.disabled = false;
+                btnLancar.innerText = `Lançar Projétil (${temposMedidos.length}/5)`;
+            } else {
+                btnLancar.style.display = 'none';
+                btnReset.style.display = 'block';
+                btnExport.style.display = 'block';
+                exibirResultados(tempoTeorico);
+                gerarConclusao();
+            }
+        }
+
+        function exibirResultados(tempoTeorico) {
+            resFinais.style.display = 'block';
+            document.getElementById('container-barras').style.display = 'block';
+            document.getElementById('container-linha').style.display = 'block';
+
+            const mediaExperimental = temposMedidos.reduce((a, b) => a + b, 0) / temposMedidos.length;
+
+            document.getElementById('res-teorico').innerHTML = `Teórico (Sem Atrito): <b>${tempoTeorico.toFixed(3)} s</b>`;
+            document.getElementById('res-experimental').innerHTML = `Empírico (Média Real): <b>${mediaExperimental.toFixed(3)} s</b>`;
+
+            grafBarras = new Chart(document.getElementById('graficoBarras').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Modelo Teórico', 'Realidade Medida'],
+                    datasets: [{
+                        label: 'Tempo (segundos)',
+                        data: [tempoTeorico, mediaExperimental],
+                        backgroundColor: ['#3b82f6', '#ef4444']
+                    }]
+                }
+            });
+
+            grafLinhas = new Chart(document.getElementById('graficoErros').getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: ['T1', 'T2', 'T3', 'T4', 'T5'],
+                    datasets: [{
+                        label: 'Taxa de Erro %',
+                        data: errosPercentuais,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 5
+                    }]
+                },
+                options: { scales: { y: { title: { display: true, text: 'Erro (%)' } } } }
+            });
+        }
+        
+        function gerarConclusao() {
+            let texto = "";
+            const mediaErro = errosPercentuais.reduce((a, b) => a + b, 0) / errosPercentuais.length;
+            
+            texto += "<p><b>Previsão Teórica (Física):</b> O modelo de MRUV previu o tempo base ignorando perdas.</p>";
+            texto += "<p><b>Comprovação Experimental (Medição):</b> Através da simulação e cronometragem, registramos as variações entre as 5 quedas.</p>";
+            
+            if (massaAtual < 1) {
+                texto += `<p><b>Análise de Diferenças:</b> Como escolhemos uma massa muito leve (${massaAtual} kg), a resistência do ar gerou um impacto perceptível. O erro médio foi de <b>${mediaErro.toFixed(1)}%</b>, comprovando a necessidade de unir cinemática e dinâmica.</p>`;
+            } else {
+                texto += `<p><b>Análise de Diferenças:</b> Com uma massa elevada (${massaAtual} kg), o peso sobrepujou o arrasto. O erro médio de <b>${mediaErro.toFixed(1)}%</b> decorre da imprecisão do instrumento de medição (tempo de reação do cronômetro).</p>`;
+            }
+            
+            textoConclusao.innerHTML = texto;
+            modalOverlay.style.display = 'block';
+            modalConclusao.style.display = 'block';
+        }
+
+        function animar() {
+            requestAnimationFrame(animar);
+
+            if (estado === 'caindo') {
+                const agora = performance.now();
+                const dt = Math.min((agora - ultimoTempoReal) / 1000, 0.1); 
+                ultimoTempoReal = agora;
+                tempoSimulacao += dt;
+
+                const aceleracaoY = gravidade - ((coefArrasto * Math.pow(velocidadeY, 2)) / massaAtual);
+                
+                velocidadeY += aceleracaoY * dt;
+                posicaoY -= velocidadeY * dt;
+
+                if (posicaoY <= raioEsfera) {
+                    esfera.position.y = raioEsfera;
+                    registrarMedicao(tempoSimulacao);
+                } else {
+                    esfera.position.y = posicaoY;
+                }
+            }
+
+            controles.update();
+            renderizador.render(cena, camera);
+        }
+        animar();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderizador.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
